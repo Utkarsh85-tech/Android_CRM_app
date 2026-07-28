@@ -1,0 +1,4 @@
+# Copy to local.properties (gitignored) and fill in your Salesforce Connected App credentials.
+sf.instance.url=https://mobile-poc-dev-ed.develop.my.salesforce.com/
+sf.client.id=YOUR_CLIENT_ID
+sf.client.secret=YOUR_CLIENT_SECRET

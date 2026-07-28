@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item
+        android:id="@+id/navigation_lead"
+        android:icon="@drawable/ic_leads"
+        android:title="@string/title_lead" />
+
+    <item
+        android:id="@+id/navigation_speaker"
+        android:icon="@drawable/ic_mic"
+        android:title="@string/title_speaker" />
+
+    <item
+        android:id="@+id/navigation_calendar"
+        android:icon="@drawable/ic_calendar"
+        android:title="@string/title_calendar" />
+
+</menu>

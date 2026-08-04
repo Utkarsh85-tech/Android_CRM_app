@@ -68,8 +68,22 @@ fun AccountEditScreen(
     onSaved: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: AccountEditViewModel = viewModel(),
+    voicePrefill: com.example.nexoworxcrmapp.speech.AccountDraft? = null,
 ) {
     val form by viewModel.formState.collectAsState()
+
+    // One-time seed from a voice-parsed draft — only applies in create mode,
+    // and only once, so it never clobbers what the user types afterward.
+    LaunchedEffect(voicePrefill) {
+        if (voicePrefill != null && form.isCreateMode) {
+            if (voicePrefill.name.isNotBlank()) viewModel.updateName(voicePrefill.name)
+            if (voicePrefill.phone.isNotBlank()) viewModel.updatePhone(voicePrefill.phone)
+            if (voicePrefill.industry.isNotBlank()) viewModel.updateIndustry(voicePrefill.industry)
+            if (voicePrefill.website.isNotBlank()) viewModel.updateWebsite(voicePrefill.website)
+            if (voicePrefill.billingCity.isNotBlank()) viewModel.updateBillingCity(voicePrefill.billingCity)
+            if (voicePrefill.description.isNotBlank()) viewModel.updateDescription(voicePrefill.description)
+        }
+    }
 
     // When save succeeds, navigate back
     LaunchedEffect(form.saveSuccess) {

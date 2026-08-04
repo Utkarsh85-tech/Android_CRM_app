@@ -20,11 +20,19 @@ import com.example.nexoworxcrmapp.data.contact.network.SalesforceContactCreateRe
 import com.example.nexoworxcrmapp.data.task.TaskRepository
  import com.example.nexoworxcrmapp.data.task.network.SalesforceTaskCreateRequest
 import com.example.nexoworxcrmapp.data.email.EmailRepository
-
+import java.time.OffsetDateTime
+import java.time.format.DateTimeFormatterBuilder
 
 
 
 object CrmRepository {
+    // Salesforce always sends offsets without a colon (e.g. "+0000"), which
+    // java.time.OffsetDateTime.parse()'s default ISO_OFFSET_DATE_TIME formatter
+    // rejects. This formatter matches Salesforce's exact wire format.
+    private val salesforceDateTimeFormatter = DateTimeFormatterBuilder()
+        .appendPattern("yyyy-MM-dd'T'HH:mm:ss.SSS")
+        .appendOffset("+HHMM", "+0000")
+        .toFormatter()
     private val leadRepository = LeadRepository(NetworkModule.leadApi)
 
     private val opportunityRepository = OpportunityRepository(NetworkModule.opportunityApi)
@@ -358,8 +366,103 @@ object CrmRepository {
 
     private val taskRepository = TaskRepository(NetworkModule.taskApi)
 
-    private val emailRepository = EmailRepository(NetworkModule.emailApi)
+    private val eventRepository = com.example.nexoworxcrmapp.data.event.EventRepository(NetworkModule.eventApi)
 
+    private val _events = MutableStateFlow<List<Event>>(emptyList())
+    val events: StateFlow<List<Event>> = _events.asStateFlow()
+
+    // Fetch all real Salesforce meetings (for Calendar screen + Home's Meetings stat)
+    suspend fun refreshEvents(): ApiResult<List<Event>> {
+        return when (val result = eventRepository.readAllEvents()) {
+            is ApiResult.Success -> {
+                _events.value = result.data
+                syncEventsToCalendar()
+                result
+            }
+            is ApiResult.Error -> result
+        }
+    }
+
+    // Turns real Events into calendar-grid entries. Only ever replaces items
+    // that were previously populated FROM a Salesforce fetch (salesforceEventId
+    // != null) — anything locally-added (e.g. a future voice-created meeting,
+    // which has salesforceEventId == null) is left untouched, so this can
+    // never silently delete it.
+    private fun syncEventsToCalendar() {
+        val zone = java.time.ZoneId.systemDefault()
+        val eventItems = _events.value.mapNotNull { event ->
+            try {
+                if (event.startDateTime.isBlank()) return@mapNotNull null
+                val start = OffsetDateTime.parse(event.startDateTime, salesforceDateTimeFormatter).atZoneSameInstant(zone)
+                val end = if (event.endDateTime.isNotBlank()) {
+                    OffsetDateTime.parse(event.endDateTime, salesforceDateTimeFormatter).atZoneSameInstant(zone)
+                } else {
+                    start
+                }
+                CalendarDayItem(
+                    id = event.id.hashCode().toLong(),
+                    date = start.dayOfMonth,
+                    month = start.monthValue,
+                    year = start.year,
+                    type = "event",
+                    subject = event.subject,
+                    time = java.time.format.DateTimeFormatter.ofPattern("h:mm a").format(start),
+                    startEpochMillis = start.toInstant().toEpochMilli(),
+                    endEpochMillis = end.toInstant().toEpochMilli(),
+                    location = event.location,
+                    salesforceEventId = event.id,
+                    whoId = event.whoId,
+                    whatId = event.whatId,
+                )
+            } catch (e: Exception) {
+                null
+            }
+        }
+        _calendarItems.update { existing ->
+            existing.filter { it.salesforceEventId == null } + eventItems
+        }
+    }
+
+    // Create a real Salesforce meeting. startEpochMillis/endEpochMillis are
+    // plain device-local timestamps from the date/time pickers; converted to
+    // the ISO format Salesforce expects.
+    suspend fun createEvent(
+        subject: String,
+        startEpochMillis: Long,
+        endEpochMillis: Long,
+        location: String = "",
+        whatId: String? = null,
+        whoId: String? = null,
+        description: String? = null,
+    ): ApiResult<Event> {
+        val zone = java.time.ZoneId.systemDefault()
+        val isoFormatter = java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME
+        val startIso = java.time.Instant.ofEpochMilli(startEpochMillis).atZone(zone).format(isoFormatter)
+        val endIso = java.time.Instant.ofEpochMilli(endEpochMillis).atZone(zone).format(isoFormatter)
+        val request = com.example.nexoworxcrmapp.data.event.network.SalesforceEventCreateRequest(
+            subject = subject,
+            startDateTime = startIso,
+            endDateTime = endIso,
+            location = location.ifBlank { null },
+            whatId = whatId,
+            whoId = whoId,
+            description = description,
+        )
+        return when (val result = eventRepository.createEvent(request)) {
+            is ApiResult.Success -> {
+                // Re-fetch everything instead of manually merging the one new
+                // item in — this guarantees the new event goes through the
+                // exact same parsing path as every other event you can
+                // already see, instead of a separate shortcut that could
+                // silently disagree with it.
+                refreshEvents()
+                result
+            }
+            is ApiResult.Error -> result
+        }
+    }
+
+    private val emailRepository = EmailRepository(NetworkModule.emailApi)
     suspend fun sendEmailToLead(
         toAddress: String,
         subject: String,

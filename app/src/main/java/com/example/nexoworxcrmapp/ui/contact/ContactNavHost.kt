@@ -22,8 +22,29 @@ private object ContactRoutes {
 }
 
 @Composable
-fun ContactNavHost(modifier: Modifier = Modifier) {
+fun ContactNavHost(
+    modifier: Modifier = Modifier,
+    openCreateOnLaunch: Boolean = false,
+    onCreateHandled: () -> Unit = {},
+    initialContactId: String? = null,
+    onInitialContactHandled: () -> Unit = {},
+) {
     val navController = rememberNavController()
+
+    // Deep-link support: Home's Quick Create / Search / Notifications can
+    // jump straight into this NavHost without knowing its internal routes.
+    androidx.compose.runtime.LaunchedEffect(openCreateOnLaunch) {
+        if (openCreateOnLaunch) {
+            navController.navigate(ContactRoutes.CREATE) { launchSingleTop = true }
+            onCreateHandled()
+        }
+    }
+    androidx.compose.runtime.LaunchedEffect(initialContactId) {
+        if (initialContactId != null) {
+            navController.navigate(ContactRoutes.detail(initialContactId)) { launchSingleTop = true }
+            onInitialContactHandled()
+        }
+    }
 
     NavHost(
         navController = navController,

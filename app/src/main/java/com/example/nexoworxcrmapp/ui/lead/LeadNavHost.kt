@@ -36,6 +36,10 @@ fun LeadNavHost(
     modifier: Modifier = Modifier,
     pendingVoiceDraft: LeadDraft? = null,
     onVoiceDraftConsumed: () -> Unit = {},
+    openCreateOnLaunch: Boolean = false,
+    onCreateHandled: () -> Unit = {},
+    initialLeadId: String? = null,
+    onInitialLeadHandled: () -> Unit = {},
 ) {
     val navController = rememberNavController()
     var voiceDraftForCreate by remember { mutableStateOf<LeadDraft?>(null) }
@@ -47,6 +51,22 @@ fun LeadNavHost(
                 launchSingleTop = true
             }
             onVoiceDraftConsumed()
+        }
+    }
+
+    // Deep-link support: Home's Quick Create / Search / Notifications can
+    // jump straight into this NavHost without knowing its internal routes.
+    LaunchedEffect(openCreateOnLaunch) {
+        if (openCreateOnLaunch) {
+            voiceDraftForCreate = null
+            navController.navigate(LeadRoutes.CREATE) { launchSingleTop = true }
+            onCreateHandled()
+        }
+    }
+    LaunchedEffect(initialLeadId) {
+        if (initialLeadId != null) {
+            navController.navigate(LeadRoutes.detail(initialLeadId)) { launchSingleTop = true }
+            onInitialLeadHandled()
         }
     }
 

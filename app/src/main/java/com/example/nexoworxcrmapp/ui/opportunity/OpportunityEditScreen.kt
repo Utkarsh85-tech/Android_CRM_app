@@ -61,8 +61,20 @@ fun OpportunityEditScreen(
     onSaved: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: OpportunityEditViewModel = viewModel(),
+    voicePrefill: com.example.nexoworxcrmapp.speech.OpportunityDraft? = null,
 ) {
     val uiState by viewModel.uiState.collectAsState()
+
+    // One-time seed from a voice-parsed draft (create mode only — opportunityId
+    // will be blank for a brand-new deal, since loadExisting() never ran).
+    LaunchedEffect(voicePrefill) {
+        if (voicePrefill != null) {
+            if (voicePrefill.name.isNotBlank()) viewModel.onNameChange(voicePrefill.name)
+            if (voicePrefill.amount.isNotBlank()) viewModel.onAmountChange(voicePrefill.amount)
+            if (voicePrefill.closeDate.isNotBlank()) viewModel.onCloseDateChange(voicePrefill.closeDate)
+            if (voicePrefill.description.isNotBlank()) viewModel.onDescriptionChange(voicePrefill.description)
+        }
+    }
 
     LaunchedEffect(uiState.saveSuccess) {
         if (uiState.saveSuccess) onSaved()

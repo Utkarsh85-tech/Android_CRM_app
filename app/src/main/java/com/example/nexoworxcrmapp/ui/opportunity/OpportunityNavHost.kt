@@ -18,10 +18,37 @@ import com.example.nexoworxcrmapp.ui.quote.QuoteViewModel
 import com.example.nexoworxcrmapp.ui.quote.QuoteWorkspaceScreen
 import com.example.nexoworxcrmapp.ui.task.TaskScreen
 import com.example.nexoworxcrmapp.ui.task.TaskViewModel
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 @Composable
-fun OpportunityNavHost(modifier: Modifier = Modifier) {
+fun OpportunityNavHost(
+    modifier: Modifier = Modifier,
+    openCreateOnLaunch: Boolean = false,
+    onCreateHandled: () -> Unit = {},
+    pendingVoiceDraft: com.example.nexoworxcrmapp.speech.OpportunityDraft? = null,
+    onVoiceDraftConsumed: () -> Unit = {},
+) {
     val navController = rememberNavController()
+    var voiceDraftForCreate by androidx.compose.runtime.remember {
+        androidx.compose.runtime.mutableStateOf<com.example.nexoworxcrmapp.speech.OpportunityDraft?>(null)
+    }
+
+    // Deep-link support: Home's Quick Create can jump straight to the
+    // "New opportunity" form without Home needing to know this NavHost's routes.
+    androidx.compose.runtime.LaunchedEffect(openCreateOnLaunch) {
+        if (openCreateOnLaunch) {
+            navController.navigate("opportunity_edit/new")
+            onCreateHandled()
+        }
+    }
+    androidx.compose.runtime.LaunchedEffect(pendingVoiceDraft) {
+        if (pendingVoiceDraft != null) {
+            voiceDraftForCreate = pendingVoiceDraft
+            navController.navigate("opportunity_edit/new") { launchSingleTop = true }
+            onVoiceDraftConsumed()
+        }
+    }
 
     NavHost(
         navController = navController,
@@ -70,9 +97,10 @@ fun OpportunityNavHost(modifier: Modifier = Modifier) {
             arguments = listOf(navArgument("opportunityId") { type = NavType.StringType }),
         ) {
             OpportunityEditScreen(
-                onBack = { navController.popBackStack() },
-                onSaved = { navController.popBackStack() },
+                onBack = { voiceDraftForCreate = null; navController.popBackStack() },
+                onSaved = { voiceDraftForCreate = null; navController.popBackStack() },
                 viewModel = viewModel(),
+                voicePrefill = voiceDraftForCreate,
             )
         }
 

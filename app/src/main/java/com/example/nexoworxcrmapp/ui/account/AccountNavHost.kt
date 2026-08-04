@@ -31,11 +31,44 @@ private object AccountRoutes {
 }
 
 @Composable
-fun AccountNavHost(modifier: Modifier = Modifier) {
+fun AccountNavHost(
+    modifier: Modifier = Modifier,
+    openCreateOnLaunch: Boolean = false,
+    onCreateHandled: () -> Unit = {},
+    initialAccountId: String? = null,
+    onInitialAccountHandled: () -> Unit = {},
+    pendingVoiceDraft: com.example.nexoworxcrmapp.speech.AccountDraft? = null,
+    onVoiceDraftConsumed: () -> Unit = {},
+) {
     val navController = rememberNavController()
+    var voiceDraftForCreate by androidx.compose.runtime.remember {
+        androidx.compose.runtime.mutableStateOf<com.example.nexoworxcrmapp.speech.AccountDraft?>(null)
+    }
 
     // Tells AccountDetailScreen to reload after returning from Edit
     var refreshDetail by rememberSaveable { mutableStateOf(false) }
+
+    // Deep-link support: Home's Quick Create / Search / Notifications can
+    // jump straight into this NavHost without knowing its internal routes.
+    androidx.compose.runtime.LaunchedEffect(openCreateOnLaunch) {
+        if (openCreateOnLaunch) {
+            navController.navigate(AccountRoutes.CREATE) { launchSingleTop = true }
+            onCreateHandled()
+        }
+    }
+    androidx.compose.runtime.LaunchedEffect(initialAccountId) {
+        if (initialAccountId != null) {
+            navController.navigate(AccountRoutes.detail(initialAccountId)) { launchSingleTop = true }
+            onInitialAccountHandled()
+        }
+    }
+    androidx.compose.runtime.LaunchedEffect(pendingVoiceDraft) {
+        if (pendingVoiceDraft != null) {
+            voiceDraftForCreate = pendingVoiceDraft
+            navController.navigate(AccountRoutes.CREATE) { launchSingleTop = true }
+            onVoiceDraftConsumed()
+        }
+    }
 
     NavHost(
         navController = navController,
@@ -56,8 +89,9 @@ fun AccountNavHost(modifier: Modifier = Modifier) {
 
         composable(AccountRoutes.CREATE) {
             AccountEditScreen(
-                onClose = { navController.popBackStack() },
-                onSaved = { navController.popBackStack() },
+                onClose = { voiceDraftForCreate = null; navController.popBackStack() },
+                onSaved = { voiceDraftForCreate = null; navController.popBackStack() },
+                voicePrefill = voiceDraftForCreate,
             )
         }
 

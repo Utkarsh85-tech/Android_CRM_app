@@ -92,6 +92,9 @@ object NetworkModule {
     val taskApi: TaskApiService by lazy {
         apiRetrofit.create(TaskApiService::class.java)
     }
+    val eventApi: com.example.nexoworxcrmapp.data.event.network.EventApiService by lazy {
+        apiRetrofit.create(com.example.nexoworxcrmapp.data.event.network.EventApiService::class.java)
+    }
     val emailApi: EmailApiService by lazy {
         apiRetrofit.create(EmailApiService::class.java)
     }

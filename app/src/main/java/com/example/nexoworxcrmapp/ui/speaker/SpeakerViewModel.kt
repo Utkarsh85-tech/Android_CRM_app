@@ -3,13 +3,14 @@ package com.example.nexoworxcrmapp.ui.speaker
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.nexoworxcrmapp.calendar.DeviceCalendarRepository
-import com.example.nexoworxcrmapp.data.CrmRepository
-import com.example.nexoworxcrmapp.network.ApiResult
+import com.example.nexoworxcrmapp.speech.AccountDraft
+import com.example.nexoworxcrmapp.speech.EventDraft
+import com.example.nexoworxcrmapp.speech.LeadDraft
+import com.example.nexoworxcrmapp.speech.OpportunityDraft
 import com.example.nexoworxcrmapp.speech.SpeechEngine
 import com.example.nexoworxcrmapp.speech.SpeechEngineFactory
 import com.example.nexoworxcrmapp.speech.SpeechEngineState
-import com.example.nexoworxcrmapp.speech.LeadDraft
+import com.example.nexoworxcrmapp.speech.TaskDraft
 import com.example.nexoworxcrmapp.speech.VoiceCommandParser
 import com.example.nexoworxcrmapp.speech.VoiceParseResult
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,10 +32,17 @@ data class SpeakerUiState(
     val micHint: String = "Tap mic, speak clearly, then wait",
 )
 
+/**
+ * Every intent (Lead/Account/Opportunity/Task/Event) follows the same
+ * pattern: parse the transcript into a draft, hand the draft to the real
+ * create screen for that record type to pre-fill, and let that screen's own
+ * "Save" button do the actual create. This ViewModel never talks to
+ * CrmRepository directly — that keeps exactly one save path per record type,
+ * instead of a second voice-only path that can drift out of sync with it.
+ */
 class SpeakerViewModel(application: Application) : AndroidViewModel(application) {
     private val speechEngine: SpeechEngine = SpeechEngineFactory.create(application)
     private val parser = VoiceCommandParser()
-    private val deviceCalendar = DeviceCalendarRepository(application)
 
     private val _uiState = MutableStateFlow(
         SpeakerUiState(
@@ -173,49 +181,19 @@ class SpeakerViewModel(application: Application) : AndroidViewModel(application)
         isRecording = false
     }
 
-    fun getCreateLeadDraft(): LeadDraft? {
-        val result = _uiState.value.parseResult
-        return (result as? VoiceParseResult.CreateLead)?.draft
-    }
+    fun getCreateLeadDraft(): LeadDraft? = (_uiState.value.parseResult as? VoiceParseResult.CreateLead)?.draft
+    fun getCreateAccountDraft(): AccountDraft? = (_uiState.value.parseResult as? VoiceParseResult.CreateAccount)?.draft
+    fun getCreateOpportunityDraft(): OpportunityDraft? = (_uiState.value.parseResult as? VoiceParseResult.CreateOpportunity)?.draft
+    fun getCreateTaskDraft(): TaskDraft? = (_uiState.value.parseResult as? VoiceParseResult.CreateTask)?.draft
+    fun getCreateEventDraft(): EventDraft? = (_uiState.value.parseResult as? VoiceParseResult.CreateEvent)?.draft
 
-    fun confirmCreate(onCalendarPermissionDenied: () -> Unit = {}) {
-        val result = _uiState.value.parseResult ?: return
-        viewModelScope.launch {
-            when (result) {
-                is VoiceParseResult.CreateLead -> Unit
-                is VoiceParseResult.CreateEvent -> {
-                    val missing = result.draft.missingRequired()
-                    if (missing.isNotEmpty()) {
-                        _uiState.update {
-                            it.copy(
-                                phase = VoiceUiPhase.Error,
-                                statusMessage = "Missing: ${missing.joinToString()}",
-                            )
-                        }
-                        return@launch
-                    }
-                    val deviceId = deviceCalendar.insertEvent(result.draft).getOrNull()
-                    if (deviceId == null) {
-                        onCalendarPermissionDenied()
-                    }
-                    CrmRepository.addEventFromVoice(result.draft, deviceId)
-                    resetAfterSave(
-                        if (deviceId != null) "Event saved to CRM & device calendar"
-                        else "Event saved to CRM (grant calendar permission for device sync)",
-                    )
-                }
-                is VoiceParseResult.Unknown -> Unit
-            }
-        }
-    }
-
-    private fun resetAfterSave(message: String) {
+    // Called by the parent once it has handed the draft off to the right
+    // create screen — just resets the sheet back to idle.
+    fun onDraftHandedOff() {
         _uiState.update {
             SpeakerUiState(
-                phase = VoiceUiPhase.Idle,
-                statusMessage = message,
-                savedMessage = message,
                 engineLabel = speechEngine.engineLabel,
+                statusMessage = "Tap mic to speak",
             )
         }
     }

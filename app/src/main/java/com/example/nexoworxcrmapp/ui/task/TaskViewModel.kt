@@ -120,6 +120,17 @@ class TaskViewModel(
         }
     }
 
+    fun openCreateSheetWithPrefill(draft: com.example.nexoworxcrmapp.speech.TaskDraft) {
+        _uiState.update {
+            it.copy(
+                showSheet = true, editingTask = null,
+                sheetSubject = draft.subject, sheetStatus = "Not Started",
+                sheetPriority = draft.priority, sheetDueDate = draft.dueDate,
+                sheetDescription = draft.description, sheetError = null,
+            )
+        }
+    }
+
     fun openEditSheet(task: Task) {
         _uiState.update {
             it.copy(

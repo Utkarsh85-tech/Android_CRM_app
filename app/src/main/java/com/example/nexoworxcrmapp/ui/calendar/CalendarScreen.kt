@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
@@ -64,7 +65,13 @@ import androidx.compose.ui.platform.LocalLocale
 
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
-fun CalendarScreen(modifier: Modifier = Modifier) {
+fun CalendarScreen(
+    modifier: Modifier = Modifier,
+    openCreateOnLaunch: Boolean = false,
+    onCreateHandled: () -> Unit = {},
+    pendingVoiceDraft: com.example.nexoworxcrmapp.speech.EventDraft? = null,
+    onVoiceDraftConsumed: () -> Unit = {},
+) {
     val today = remember { LocalDate.now() }
     var calendarMonth by remember { mutableStateOf(LocalDate.of(today.year, today.month, 1)) }
     var selectedDay by remember { mutableIntStateOf(today.dayOfMonth) }
@@ -77,14 +84,54 @@ fun CalendarScreen(modifier: Modifier = Modifier) {
     }
     val dayLabels = listOf("S", "M", "T", "W", "T", "F", "S")
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(CrmBg),
-    ) {
+    // Real Salesforce meetings only ever get pulled in here — nothing
+    // fetches them automatically anywhere else in the app.
+    var eventSyncStatus by remember { mutableStateOf("Loading meetings…") }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        when (val result = CrmRepository.refreshEvents()) {
+            is com.example.nexoworxcrmapp.network.ApiResult.Success ->
+                eventSyncStatus = "Synced ${result.data.size} meeting(s) from Salesforce"
+            is com.example.nexoworxcrmapp.network.ApiResult.Error ->
+                eventSyncStatus = "Meeting sync failed: ${result.message}"
+        }
+    }
+
+    var showCreateEvent by remember { mutableStateOf(false) }
+    var voiceDraftForCreate by remember { mutableStateOf<com.example.nexoworxcrmapp.speech.EventDraft?>(null) }
+    androidx.compose.runtime.LaunchedEffect(openCreateOnLaunch) {
+        if (openCreateOnLaunch) {
+            showCreateEvent = true
+            onCreateHandled()
+        }
+    }
+    androidx.compose.runtime.LaunchedEffect(pendingVoiceDraft) {
+        if (pendingVoiceDraft != null) {
+            voiceDraftForCreate = pendingVoiceDraft
+            showCreateEvent = true
+            onVoiceDraftConsumed()
+        }
+    }
+
+    if (showCreateEvent) {
+        EventCreateScreen(
+            onBack = { showCreateEvent = false; voiceDraftForCreate = null },
+            onSaved = { showCreateEvent = false; voiceDraftForCreate = null },
+            modifier = modifier,
+            voicePrefill = voiceDraftForCreate,
+        )
+        return
+    }
+
+    Box(modifier = modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(CrmBg),
+        ) {
         Column(modifier = Modifier.padding(horizontal = 16.dp)) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(text = "Calendar", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = Charcoal)
+            Text(text = eventSyncStatus, fontSize = 11.sp, color = MutedGreen)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -268,6 +315,22 @@ fun CalendarScreen(modifier: Modifier = Modifier) {
                 items(dayEvents) { event -> CalendarEventCard(event) }
             }
             item { Spacer(modifier = Modifier.height(8.dp)) }
+        }
+        }
+
+        androidx.compose.material3.FloatingActionButton(
+            onClick = { showCreateEvent = true },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp),
+            shape = CircleShape,
+            containerColor = Forest,
+            contentColor = CrmSurface,
+        ) {
+            Icon(
+                Icons.Default.Add,
+                contentDescription = "New meeting",
+            )
         }
     }
 }

@@ -70,7 +70,7 @@ fun SpeakerScreen(
     modifier: Modifier = Modifier,
     viewModel: SpeakerViewModel = viewModel(),
     onClose: () -> Unit = {},
-    onOpenCreateLead: (com.example.nexoworxcrmapp.speech.LeadDraft) -> Unit = {},
+    onOpenCreate: (VoiceParseResult) -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val phase = uiState.phase
@@ -110,9 +110,13 @@ fun SpeakerScreen(
             onClose = onClose,
             onMicClick = onMicWithPermission,
             onTryAgain = viewModel::tryAgain,
-            onConfirmEvent = { viewModel.confirmCreate() },
-            onOpenCreateLead = {
-                viewModel.getCreateLeadDraft()?.let(onOpenCreateLead)
+            onOpenCreate = {
+                uiState.parseResult?.let { result ->
+                    if (result !is VoiceParseResult.Unknown) {
+                        onOpenCreate(result)
+                        viewModel.onDraftHandedOff()
+                    }
+                }
             },
             onSampleClick = viewModel::onSamplePhrase,
             modifier = Modifier.align(Alignment.BottomCenter),
@@ -126,8 +130,7 @@ private fun VoiceAssistantSheet(
     onClose: () -> Unit,
     onMicClick: () -> Unit,
     onTryAgain: () -> Unit,
-    onConfirmEvent: () -> Unit,
-    onOpenCreateLead: () -> Unit,
+    onOpenCreate: () -> Unit,
     onSampleClick: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -250,6 +253,9 @@ private fun VoiceAssistantSheet(
         if (phase == VoiceUiPhase.Result && parseResult != null && parseResult !is VoiceParseResult.Unknown) {
             val fields = when (parseResult) {
                 is VoiceParseResult.CreateLead -> parseResult.draft.displayFields()
+                is VoiceParseResult.CreateAccount -> parseResult.draft.displayFields()
+                is VoiceParseResult.CreateOpportunity -> parseResult.draft.displayFields()
+                is VoiceParseResult.CreateTask -> parseResult.draft.displayFields()
                 is VoiceParseResult.CreateEvent -> parseResult.draft.displayFields()
                 is VoiceParseResult.Unknown -> emptyList()
             }
@@ -302,45 +308,29 @@ private fun VoiceAssistantSheet(
                     color = Color(0xB3FFFFFF),
                     textAlign = TextAlign.Center,
                 )
-                if (parseResult is VoiceParseResult.CreateLead) {
-                    Row(
-                        modifier = Modifier
-                            .weight(2f)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(Brush.linearGradient(listOf(MidGreen, Forest)))
-                            .clickable(onClick = onOpenCreateLead)
-                            .padding(vertical = 13.dp, horizontal = 12.dp),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(
-                            Icons.Default.Check,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(16.dp),
-                        )
-                        Text(
-                            text = "Open Form to Confirm",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(start = 6.dp),
-                        )
-                    }
-                } else {
+                Row(
+                    modifier = Modifier
+                        .weight(2f)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Brush.linearGradient(listOf(MidGreen, Forest)))
+                        .clickable(onClick = onOpenCreate)
+                        .padding(vertical = 13.dp, horizontal = 12.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        Icons.Default.Check,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp),
+                    )
                     Text(
-                        text = "Save",
-                        modifier = Modifier
-                            .weight(2f)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(Brush.linearGradient(listOf(MidGreen, Forest)))
-                            .clickable(onClick = onConfirmEvent)
-                            .padding(vertical = 13.dp),
+                        text = "Open Form to Confirm",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White,
                         textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(start = 6.dp),
                     )
                 }
             }

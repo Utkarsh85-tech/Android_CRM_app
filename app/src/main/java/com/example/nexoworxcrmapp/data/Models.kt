@@ -132,6 +132,21 @@ data class PricebookEntry(
 )
 
 
+// A real Salesforce Event (a scheduled meeting/call) — distinct from Task,
+// which has no fixed start/end time. Mirrors Task's shape: same WhoId/WhatId
+// relationship fields, same REST pattern, just calendar-specific fields
+// instead of Status/Priority/ActivityDate.
+data class Event(
+    val id: String,
+    val subject: String,
+    val startDateTime: String = "", // ISO 8601, e.g. 2026-08-02T15:00:00.000+0000
+    val endDateTime: String = "",
+    val location: String = "",
+    val whatId: String = "",        // linked Account/Opportunity
+    val whoId: String = "",         // linked Lead/Contact
+    val description: String = "",
+)
+
 data class CalendarDayItem(
     val id: Long = 0,
     val date: Int,
@@ -144,6 +159,13 @@ data class CalendarDayItem(
     val endEpochMillis: Long = 0L,
     val location: String = "",
     val deviceEventId: Long? = null,
+    // Set only for items that came from a real Salesforce Event fetch.
+    // null means "locally added, not (yet) confirmed against the server" —
+    // e.g. a voice-created meeting. refreshEvents() only ever replaces items
+    // where this is non-null, so it can never delete a local-only entry.
+    val salesforceEventId: String? = null,
+    val whoId: String = "",
+    val whatId: String = "",
 )
 
 object SampleData {

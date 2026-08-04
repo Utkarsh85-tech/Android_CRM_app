@@ -30,6 +30,63 @@ data class LeadDraft(
     }
 }
 
+data class AccountDraft(
+    val name: String = "",
+    val phone: String = "",
+    val industry: String = "",
+    val website: String = "",
+    val billingCity: String = "",
+    val description: String = "",
+) {
+    fun displayFields(): List<Pair<String, String>> = buildList {
+        if (name.isNotBlank()) add("Name" to name)
+        if (phone.isNotBlank()) add("Phone" to phone)
+        if (industry.isNotBlank()) add("Industry" to industry)
+        if (website.isNotBlank()) add("Website" to website)
+        if (billingCity.isNotBlank()) add("City" to billingCity)
+    }
+
+    fun missingRequired(): List<String> = buildList {
+        if (name.isBlank()) add("Name")
+    }
+}
+
+data class OpportunityDraft(
+    val name: String = "",
+    val amount: String = "",
+    val stageName: String = "Prospecting",
+    val closeDate: String = "",
+    val description: String = "",
+) {
+    fun displayFields(): List<Pair<String, String>> = buildList {
+        if (name.isNotBlank()) add("Deal name" to name)
+        if (amount.isNotBlank()) add("Amount" to amount)
+        add("Stage" to stageName)
+        if (closeDate.isNotBlank()) add("Close date" to closeDate)
+    }
+
+    fun missingRequired(): List<String> = buildList {
+        if (name.isBlank()) add("Deal name")
+    }
+}
+
+data class TaskDraft(
+    val subject: String = "",
+    val priority: String = "Normal",
+    val dueDate: String = "",
+    val description: String = "",
+) {
+    fun displayFields(): List<Pair<String, String>> = buildList {
+        if (subject.isNotBlank()) add("Subject" to subject)
+        add("Priority" to priority)
+        if (dueDate.isNotBlank()) add("Due" to dueDate)
+    }
+
+    fun missingRequired(): List<String> = buildList {
+        if (subject.isBlank()) add("Subject")
+    }
+}
+
 data class EventDraft(
     val subject: String = "",
     val startEpochMillis: Long = 0L,
@@ -52,12 +109,18 @@ data class EventDraft(
 
 sealed class VoiceParseResult {
     data class CreateLead(val draft: LeadDraft) : VoiceParseResult()
+    data class CreateAccount(val draft: AccountDraft) : VoiceParseResult()
+    data class CreateOpportunity(val draft: OpportunityDraft) : VoiceParseResult()
+    data class CreateTask(val draft: TaskDraft) : VoiceParseResult()
     data class CreateEvent(val draft: EventDraft) : VoiceParseResult()
     data class Unknown(val reason: String) : VoiceParseResult()
 
     val intentLabel: String
         get() = when (this) {
             is CreateLead -> "Create Lead"
+            is CreateAccount -> "Create Account"
+            is CreateOpportunity -> "Create Opportunity"
+            is CreateTask -> "Create Task"
             is CreateEvent -> "Create Event"
             is Unknown -> "Unknown"
         }

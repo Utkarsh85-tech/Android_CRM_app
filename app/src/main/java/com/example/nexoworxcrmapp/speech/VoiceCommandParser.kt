@@ -22,10 +22,29 @@ class VoiceCommandParser(
         val normalized = text.lowercase(Locale.US)
         return when {
             isLeadIntent(normalized) -> parseLead(text, normalized)
+            isAccountIntent(normalized) -> parseAccount(text, normalized)
+            isOpportunityIntent(normalized) -> parseOpportunity(text, normalized)
+            isTaskIntent(normalized) -> parseTask(text, normalized)
             isEventIntent(normalized) -> parseEvent(text, normalized)
-            else -> VoiceParseResult.Unknown("Say \"create a lead\" or \"schedule an event\"")
+            else -> VoiceParseResult.Unknown(
+                "Say \"create a lead\", \"add an account\", \"create a deal\", \"add a task\", or \"schedule an event\"",
+            )
         }
     }
+
+    private fun isAccountIntent(text: String): Boolean =
+        listOf("create an account", "create account", "new account", "add an account", "add account")
+            .any { text.contains(it) }
+
+    private fun isOpportunityIntent(text: String): Boolean =
+        listOf(
+            "create an opportunity", "create opportunity", "new opportunity", "add an opportunity", "add opportunity",
+            "create a deal", "create deal", "new deal", "add a deal", "add deal", "log an opportunity", "log a deal",
+        ).any { text.contains(it) }
+
+    private fun isTaskIntent(text: String): Boolean =
+        listOf("create a task", "create task", "new task", "add a task", "add task", "remind me to")
+            .any { text.contains(it) }
 
     private fun isLeadIntent(text: String): Boolean =
         listOf("create a lead", "create lead", "new lead", "add a lead", "add lead").any { text.contains(it) }
@@ -60,6 +79,134 @@ class VoiceCommandParser(
         } else {
             VoiceParseResult.CreateLead(draft)
         }
+    }
+
+    private fun parseAccount(original: String, normalized: String): VoiceParseResult {
+        val body = extractBody(original, normalized, accountPrefixes)
+        val phone = extractPhone(body) ?: ""
+        val website = extractWebsite(body)
+        val industry = extractIndustry(body)
+        val name = extractAccountName(body)
+
+        val draft = AccountDraft(
+            name = name,
+            phone = phone,
+            industry = industry,
+            website = website,
+            description = body,
+        )
+        return VoiceParseResult.CreateAccount(draft)
+    }
+
+    private fun parseOpportunity(original: String, normalized: String): VoiceParseResult {
+        val body = extractBody(original, normalized, opportunityPrefixes)
+        val amount = extractAmount(body) ?: ""
+        val name = extractOpportunityName(body)
+        val closeDate = extractDateOnly(normalized)
+
+        val draft = OpportunityDraft(
+            name = name,
+            amount = amount,
+            closeDate = closeDate,
+            description = body,
+        )
+        return VoiceParseResult.CreateOpportunity(draft)
+    }
+
+    private fun parseTask(original: String, normalized: String): VoiceParseResult {
+        val body = extractBody(original, normalized, taskPrefixes)
+        val priority = extractPriority(normalized)
+        val dueDate = extractDateOnly(normalized)
+        val subject = extractTaskSubject(body)
+
+        val draft = TaskDraft(
+            subject = subject,
+            priority = priority,
+            dueDate = dueDate,
+            description = body,
+        )
+        return VoiceParseResult.CreateTask(draft)
+    }
+
+    private fun extractWebsite(text: String): String =
+        Regex("""\b((?:www\.)?[a-z0-9-]+\.(?:com|in|org|net|io|co))\b""", RegexOption.IGNORE_CASE)
+            .find(text)?.value.orEmpty()
+
+    private fun extractIndustry(text: String): String {
+        val industries = listOf(
+            "Technology", "Manufacturing", "Healthcare", "Finance", "Retail",
+            "Education", "Construction", "Agriculture", "Hospitality", "Transportation",
+        )
+        return industries.firstOrNull { text.contains(it, ignoreCase = true) } ?: ""
+    }
+
+    private fun extractAccountName(text: String): String {
+        var name = text
+        name = name.split(Regex("""\s+(?:phone|number|website|industry)\s+""", RegexOption.IGNORE_CASE)).firstOrNull() ?: name
+        name = name.split(",").firstOrNull()?.trim().orEmpty()
+        if (name.isBlank()) name = text.take(60).trim()
+        return name.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }
+    }
+
+    private fun extractAmount(text: String): String? {
+        val match = Regex(
+            """(?:worth|of|for|amount)?\s*(?:₹|rs\.?|inr)?\s*([\d,]{3,}(?:\.\d+)?)\s*(k|thousand|lakh|lakhs|l|crore|cr)?""",
+            RegexOption.IGNORE_CASE,
+        ).find(text) ?: return null
+        val raw = match.groupValues[1].replace(",", "").toDoubleOrNull() ?: return null
+        val multiplier = when (match.groupValues[2].lowercase()) {
+            "k", "thousand" -> 1_000.0
+            "lakh", "lakhs", "l" -> 100_000.0
+            "crore", "cr" -> 10_000_000.0
+            else -> 1.0
+        }
+        val value = raw * multiplier
+        return if (value == value.toLong().toDouble()) value.toLong().toString() else value.toString()
+    }
+
+    private fun extractOpportunityName(text: String): String {
+        var name = text
+        name = name.split(Regex("""\s+worth\s+""", RegexOption.IGNORE_CASE)).firstOrNull() ?: name
+        name = name.split(Regex("""\s+for\s+₹|\s+for\s+rs""", RegexOption.IGNORE_CASE)).firstOrNull() ?: name
+        name = name.split(",").firstOrNull()?.trim().orEmpty()
+        if (name.length < 3) name = text.take(60).trim()
+        return name.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }
+    }
+
+    private fun extractPriority(text: String): String = when {
+        text.contains("urgent") || text.contains("high priority") -> "High"
+        text.contains("low priority") -> "Low"
+        else -> "Normal"
+    }
+
+    private fun extractTaskSubject(body: String): String {
+        var subject = body
+        listOf(
+            Regex("""tomorrow.*""", RegexOption.IGNORE_CASE),
+            Regex("""next\s+\w+.*""", RegexOption.IGNORE_CASE),
+            Regex("""due\s+.*""", RegexOption.IGNORE_CASE),
+            Regex("""by\s+\w+.*""", RegexOption.IGNORE_CASE),
+        ).forEach { subject = subject.replace(it, "").trim() }
+        subject = subject.split(",").firstOrNull()?.trim().orEmpty()
+        if (subject.length < 3) subject = body.take(60).trim()
+        return subject.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }
+    }
+
+    // Date only (no time) — used for Task due dates and Opportunity close dates.
+    // Returns "YYYY-MM-DD", matching what Salesforce's Date fields expect.
+    private fun extractDateOnly(normalized: String): String {
+        val now = clock()
+        var date = now.toLocalDate()
+        when {
+            normalized.contains("tomorrow") -> date = date.plusDays(1)
+            normalized.contains("today") -> Unit
+            normalized.contains("next week") -> date = date.plusWeeks(1)
+            else -> {
+                val day = DayOfWeek.entries.firstOrNull { normalized.contains(it.name.lowercase()) }
+                if (day != null) date = date.with(TemporalAdjusters.next(day))
+            }
+        }
+        return date.toString()
     }
 
     private fun parseEvent(original: String, normalized: String): VoiceParseResult {
@@ -226,6 +373,16 @@ class VoiceCommandParser(
     companion object {
         private val leadPrefixes = listOf(
             "create a lead", "create lead", "new lead", "add a lead", "add lead",
+        )
+        private val accountPrefixes = listOf(
+            "create an account", "create account", "new account", "add an account", "add account",
+        )
+        private val opportunityPrefixes = listOf(
+            "create an opportunity", "create opportunity", "new opportunity", "add an opportunity", "add opportunity",
+            "create a deal", "create deal", "new deal", "add a deal", "add deal", "log an opportunity", "log a deal",
+        )
+        private val taskPrefixes = listOf(
+            "create a task", "create task", "new task", "add a task", "add task", "remind me to",
         )
         private val eventPrefixes = listOf(
             "schedule an event", "schedule event", "create an event", "create event",

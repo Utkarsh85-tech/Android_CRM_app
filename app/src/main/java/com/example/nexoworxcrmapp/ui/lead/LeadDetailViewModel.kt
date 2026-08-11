@@ -50,23 +50,20 @@ class LeadDetailViewModel(
     fun loadLead() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-            when (val result = CrmRepository.readLeadDetail(leadId)) {
-                is ApiResult.Success -> {
-                    val lead = result.data
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            lead = lead,
-                            tasks = SampleData.mockTasksForLead(lead),
-                            events = SampleData.mockEventsForLead(lead),
-                            errorMessage = null,
-                        )
-                    }
+            val lead = CrmRepository.readLeadDetail(leadId)
+            if (lead != null) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        lead = lead,
+                        tasks = SampleData.mockTasksForLead(lead),
+                        events = SampleData.mockEventsForLead(lead),
+                        errorMessage = null,
+                    )
                 }
-                is ApiResult.Error -> {
-                    _uiState.update {
-                        it.copy(isLoading = false, errorMessage = result.message)
-                    }
+            } else {
+                _uiState.update {
+                    it.copy(isLoading = false, errorMessage = "Lead not found")
                 }
             }
         }
@@ -76,20 +73,11 @@ class LeadDetailViewModel(
         _uiState.update { it.copy(selectedTab = tab) }
     }
 
-    /** Permanently deletes this lead from Salesforce */
     fun deleteLead() {
         viewModelScope.launch {
             _uiState.update { it.copy(isDeleting = true, deleteErrorMessage = null) }
-            when (val result = CrmRepository.deleteLead(leadId)) {
-                is ApiResult.Success -> {
-                    _uiState.update { it.copy(isDeleting = false, deleteSuccess = true) }
-                }
-                is ApiResult.Error -> {
-                    _uiState.update {
-                        it.copy(isDeleting = false, deleteErrorMessage = result.message)
-                    }
-                }
-            }
+            CrmRepository.deleteLead(leadId)
+            _uiState.update { it.copy(isDeleting = false, deleteSuccess = true) }
         }
     }
 

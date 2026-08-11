@@ -1,6 +1,9 @@
 package com.example.nexoworxcrmapp.data.lead.network
 
 import com.example.nexoworxcrmapp.data.Lead
+import com.example.nexoworxcrmapp.data.local.entity.LeadEntity
+import com.example.nexoworxcrmapp.data.local.entity.SyncStatus
+
 
 fun SalesforceLeadDto.toDomain(): Lead {
     return Lead(
@@ -64,3 +67,16 @@ fun mapStatusForSalesforce(status: String): String {
 }
 
 private const val DEFAULT_LEAD_STATUS = "Open - Not Contacted"
+
+fun LeadEntity.toDomain(): Lead = Lead(
+    id = id, firstName = firstName, lastName = lastName, company = company,
+    status = status, phone = phone, email = email, source = source,
+    rating = rating, industry = industry, title = title, description = description,
+)
+
+fun Lead.toEntity(syncStatus: String = SyncStatus.SYNCED): LeadEntity = LeadEntity(
+    id = id, firstName = firstName, lastName = lastName, company = company,
+    status = status, phone = phone, email = email, source = source,
+    rating = rating, industry = industry, title = title, description = description,
+    syncStatus = syncStatus, lastModifiedLocal = System.currentTimeMillis(),
+)

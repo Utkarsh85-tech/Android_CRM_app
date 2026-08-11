@@ -22,6 +22,10 @@ import com.example.nexoworxcrmapp.data.task.TaskRepository
 import com.example.nexoworxcrmapp.data.email.EmailRepository
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatterBuilder
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 
 
 
@@ -33,7 +37,6 @@ object CrmRepository {
         .appendPattern("yyyy-MM-dd'T'HH:mm:ss.SSS")
         .appendOffset("+HHMM", "+0000")
         .toFormatter()
-    private val leadRepository = LeadRepository(NetworkModule.leadApi)
 
     private val opportunityRepository = OpportunityRepository(NetworkModule.opportunityApi)
 
@@ -177,70 +180,30 @@ object CrmRepository {
 
 
 
-    private val _leads = MutableStateFlow<List<Lead>>(emptyList())
-    val leads: StateFlow<List<Lead>> = _leads.asStateFlow()
+    val leads: StateFlow<List<Lead>> =
+        NetworkModule.leadRepository.observeLeads()
+            .stateIn(CoroutineScope(Dispatchers.IO), SharingStarted.Eagerly, emptyList())
 
     private val _calendarItems = MutableStateFlow(SampleData.calendarEvents)
     val calendarItems: StateFlow<List<CalendarDayItem>> = _calendarItems.asStateFlow()
 
     private var nextEventId = 100L
 
-    suspend fun refreshLeads(): ApiResult<List<Lead>> {
-        return when (val result = leadRepository.readAllLeads()) {
-            is ApiResult.Success -> {
-                _leads.value = result.data
-                result
-            }
-            is ApiResult.Error -> result
-        }
+    suspend fun refreshLeads(): ApiResult<Unit> {
+        NetworkModule.syncManager.sync()
+        return ApiResult.Success(Unit)
     }
 
-    suspend fun readLeadDetail(id: String): ApiResult<Lead> = leadRepository.readOneLead(id)
+    suspend fun readLeadDetail(id: String): Lead? =
+        leads.value.find { it.id == id }
 
-    suspend fun createLead(lead: Lead): ApiResult<Lead> {
-        return when (val result = leadRepository.createLead(lead.toCreateRequest())) {
-            is ApiResult.Success -> {
-                _leads.update { it + result.data }
-                result
-            }
-            is ApiResult.Error -> result
-        }
-    }
+    suspend fun createLead(lead: Lead): Lead = NetworkModule.leadRepository.createLead(lead)
 
-    suspend fun updateLead(id: String, lead: Lead): ApiResult<Lead> {
-        return when (val result = leadRepository.updateLead(id, lead)) {
-            is ApiResult.Success -> {
-                _leads.update { existing ->
-                    existing.map { if (it.id == id) result.data else it }
-                }
-                result
-            }
-            is ApiResult.Error -> result
-        }
-    }
+    suspend fun updateLead(id: String, lead: Lead) = NetworkModule.leadRepository.updateLead(id, lead)
 
+    suspend fun deleteLead(id: String) = NetworkModule.leadRepository.deleteLead(id)
 
-    suspend fun deleteLead(id: String): ApiResult<Unit> {
-        return when (val result = leadRepository.deleteLead(id)) {
-            is ApiResult.Success -> {
-                // Remove from local cache so the list updates immediately
-                _leads.update { it.filter { lead -> lead.id != id } }
-                result
-            }
-            is ApiResult.Error -> result
-        }
-    }
-
-    suspend fun convertLead(id: String): ApiResult<Unit> {
-        return when (val result = leadRepository.convertLead(id)) {
-            is ApiResult.Success -> {
-                // Remove converted lead from local cache (it no longer exists as a Lead)
-                _leads.update { it.filter { lead -> lead.id != id } }
-                result
-            }
-            is ApiResult.Error -> result
-        }
-    }
+    suspend fun convertLead(id: String): ApiResult<Unit> = NetworkModule.leadRepository.convertLead(id)
     suspend fun createLeadFromVoice(draft: LeadDraft): ApiResult<Lead> {
         val lead = Lead(
             id = "",
@@ -254,7 +217,7 @@ object CrmRepository {
             rating = draft.rating,
             description = draft.description,
         )
-        return createLead(lead)
+        return ApiResult.Success(createLead(lead))
     }
 
     fun addEventFromVoice(draft: EventDraft, deviceEventId: Long? = null): CalendarDayItem {
@@ -486,7 +449,7 @@ object CrmRepository {
     // Fetch all tasks (for Tasks tab)
     suspend fun refreshTasks(): ApiResult<List<Task>> {
         // Preload leads/accounts/opportunities so category filtering works
-        if (_leads.value.isEmpty()) refreshLeads()
+        if (leads.value.isEmpty()) refreshLeads()
         if (_accounts.value.isEmpty()) refreshAccounts()
         if (_opportunities.value.isEmpty()) refreshOpportunities()
         return when (val result = taskRepository.readAllTasks()) {

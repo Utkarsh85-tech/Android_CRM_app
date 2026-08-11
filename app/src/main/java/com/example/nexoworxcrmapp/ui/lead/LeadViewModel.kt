@@ -22,6 +22,11 @@ class LeadViewModel : ViewModel() {
     val uiState: StateFlow<LeadUiState> = _uiState.asStateFlow()
 
     init {
+        viewModelScope.launch {
+            CrmRepository.leads.collect { leadList ->
+                _uiState.update { it.copy(leads = leadList) }
+            }
+        }
         refresh()
     }
 
@@ -30,18 +35,10 @@ class LeadViewModel : ViewModel() {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             when (val result = CrmRepository.refreshLeads()) {
                 is ApiResult.Success -> {
-                    _uiState.update {
-                        it.copy(isLoading = false, leads = result.data, errorMessage = null)
-                    }
+                    _uiState.update { it.copy(isLoading = false, errorMessage = null) }
                 }
                 is ApiResult.Error -> {
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            leads = CrmRepository.leads.value,
-                            errorMessage = result.message,
-                        )
-                    }
+                    _uiState.update { it.copy(isLoading = false, errorMessage = result.message) }
                 }
             }
         }

@@ -74,29 +74,26 @@ class LeadEditViewModel(
         val id = leadId ?: return
         viewModelScope.launch {
             _formState.update { it.copy(isLoading = true, errorMessage = null) }
-            when (val result = CrmRepository.readLeadDetail(id)) {
-                is ApiResult.Success -> {
-                    originalLead = result.data
-                    val lead = result.data
-                    _formState.update {
-                        it.copy(
-                            isLoading = false,
-                            firstName = lead.firstName,
-                            lastName = lead.lastName,
-                            company = lead.company,
-                            email = lead.email,
-                            phone = lead.phone,
-                            status = displayLeadStatus(lead.status),
-                            source = lead.source,
-                            rating = lead.rating,
-                            description = lead.description,
-                        )
-                    }
+            val lead = CrmRepository.readLeadDetail(id)
+            if (lead != null) {
+                originalLead = lead
+                _formState.update {
+                    it.copy(
+                        isLoading = false,
+                        firstName = lead.firstName,
+                        lastName = lead.lastName,
+                        company = lead.company,
+                        email = lead.email,
+                        phone = lead.phone,
+                        status = displayLeadStatus(lead.status),
+                        source = lead.source,
+                        rating = lead.rating,
+                        description = lead.description,
+                    )
                 }
-                is ApiResult.Error -> {
-                    _formState.update {
-                        it.copy(isLoading = false, errorMessage = result.message)
-                    }
+            } else {
+                _formState.update {
+                    it.copy(isLoading = false, errorMessage = "Lead not found")
                 }
             }
         }
@@ -143,22 +140,14 @@ class LeadEditViewModel(
                 rating = state.rating.trim(),
                 description = state.description.trim(),
             )
-            val result = if (isCreateMode) {
-                CrmRepository.createLead(leadData)
+            if (isCreateMode) {
+                val created = CrmRepository.createLead(leadData)
+                originalLead = created
             } else {
                 CrmRepository.updateLead(leadId!!, leadData)
+                originalLead = leadData.copy(id = leadId)
             }
-            when (result) {
-                is ApiResult.Success -> {
-                    originalLead = result.data
-                    _formState.update { it.copy(isSaving = false, saveSuccess = true) }
-                }
-                is ApiResult.Error -> {
-                    _formState.update {
-                        it.copy(isSaving = false, errorMessage = result.message)
-                    }
-                }
-            }
+            _formState.update { it.copy(isSaving = false, saveSuccess = true) }
         }
     }
 

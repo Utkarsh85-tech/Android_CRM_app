@@ -21,7 +21,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.time.LocalDate
-
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 /**
  * Aggregates data that already lives in CrmRepository into the shape the
  * Home screen (and the Notifications screen, which reuses [actionItems])
@@ -51,12 +52,19 @@ class HomeViewModel : ViewModel() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
 
-            // These populate CrmRepository's shared StateFlows; every screen
-            // that reads them (Leads tab, Accounts tab, etc.) benefits too.
-            CrmRepository.refreshLeads()
-            CrmRepository.refreshTasks()
-            CrmRepository.refreshOpportunities()
-            CrmRepository.refreshEvents()
+            if (com.example.nexoworxcrmapp.network.NetworkModule.connectivityObserver.isCurrentlyOnline()) {
+                kotlinx.coroutines.coroutineScope {
+                    val leadsJob = async { CrmRepository.refreshLeads() }
+                    val tasksJob = async { CrmRepository.refreshTasks() }
+                    val opportunitiesJob = async { CrmRepository.refreshOpportunities() }
+                    val eventsJob = async { CrmRepository.refreshEvents() }
+                    listOf(leadsJob, tasksJob, opportunitiesJob, eventsJob).awaitAll()
+                }
+            }
+            // Offline: skip the network round-trip entirely and build the
+            // dashboard from whatever's already cached — Leads from Room
+            // (always current), everything else from CrmRepository's
+            // in-memory StateFlows (last successful fetch, or empty).
 
             val leads = CrmRepository.leads.value
             val tasks = CrmRepository.tasks.value

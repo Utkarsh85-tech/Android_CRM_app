@@ -107,18 +107,20 @@ class LeadRepository(
         }
     }
 
-    suspend fun pushCreate(op: PendingOperationEntity): Boolean {
+    /** Returns the new Salesforce Id on success, or null on failure. */
+    suspend fun pushCreateReturningId(op: PendingOperationEntity): String? {
         val request = gson.fromJson(op.payloadJson, SalesforceLeadCreateRequest::class.java)
         return when (val result = safeApiCall { api.createLead(request) }) {
             is ApiResult.Success -> {
-                if (!result.data.success) return false
+                if (!result.data.success) return null
                 val fresh = safeApiCall { api.getLead(result.data.id) }
                 if (fresh is ApiResult.Success) {
                     leadDao.replaceLocalWithServer(op.entityId, fresh.data.toDomain().toEntity(SyncStatus.SYNCED))
+                    return fresh.data.id
                 }
-                true
+                null
             }
-            is ApiResult.Error -> false
+            is ApiResult.Error -> null
         }
     }
 

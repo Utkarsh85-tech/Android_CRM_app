@@ -26,7 +26,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-
+import kotlinx.coroutines.launch
 
 
 object CrmRepository {
@@ -327,7 +327,7 @@ object CrmRepository {
         }
     }
 
-    private val taskRepository = TaskRepository(NetworkModule.taskApi)
+
 
     private val eventRepository = com.example.nexoworxcrmapp.data.event.EventRepository(NetworkModule.eventApi)
 
@@ -443,28 +443,24 @@ object CrmRepository {
     }
 
 
-    private val _tasks = MutableStateFlow<List<Task>>(emptyList())
-    val tasks: StateFlow<List<Task>> = _tasks.asStateFlow()
+    val tasks: StateFlow<List<Task>> =
+        NetworkModule.taskRepository.observeTasks()
+            .stateIn(CoroutineScope(Dispatchers.IO), SharingStarted.Eagerly, emptyList())
+            .also { flow ->
+                CoroutineScope(Dispatchers.IO).launch { flow.collect { syncTasksToCalendar() } }
+            }
 
-    // Fetch all tasks (for Tasks tab)
-    suspend fun refreshTasks(): ApiResult<List<Task>> {
-        // Preload leads/accounts/opportunities so category filtering works
+    suspend fun refreshTasks(): ApiResult<Unit> {
         if (leads.value.isEmpty()) refreshLeads()
         if (_accounts.value.isEmpty()) refreshAccounts()
         if (_opportunities.value.isEmpty()) refreshOpportunities()
-        return when (val result = taskRepository.readAllTasks()) {
-            is ApiResult.Success -> {
-                _tasks.value = result.data
-                syncTasksToCalendar()
-                result
-            }
-            is ApiResult.Error -> result
-        }
+        NetworkModule.syncManager.sync()
+        return ApiResult.Success(Unit)
     }
 
     // ADD this function after refreshTasks():
     fun syncTasksToCalendar() {
-        val taskItems = _tasks.value
+        val taskItems = tasks.value
             .filter { it.dueDate.isNotBlank() }
             .mapNotNull { task ->
                 try {
@@ -491,76 +487,20 @@ object CrmRepository {
     }
 
     // Fetch tasks for a specific Lead/Account/Opportunity
-    suspend fun refreshTasksForParent(parentId: String, isLead: Boolean = false): ApiResult<List<Task>> {
-        return taskRepository.readTasksForParent(parentId, isLead)
-    }
+    suspend fun refreshTasksForParent(parentId: String, isLead: Boolean = false): ApiResult<List<Task>> =
+        ApiResult.Success(tasks.value.filter { (isLead && it.whoId == parentId) || (!isLead && it.whatId == parentId) })
 
     suspend fun createTask(
-        subject: String,
-        status: String = "Not Started",
-        priority: String = "Normal",
-        dueDate: String? = null,
-        whoId: String? = null,    // ← for Lead tasks
-        whatId: String? = null,   // ← for Account/Opportunity tasks
-        description: String? = null,
-    ): ApiResult<Task> {
-        val request = SalesforceTaskCreateRequest(
-            subject = subject,
-            status = status,
-            priority = priority,
-            activityDate = dueDate,
-            whoId = whoId,
-            whatId = whatId,
-            description = description,
-        )
-
-        return when (val result = taskRepository.createTask(request)) {
-            is ApiResult.Success -> {
-                _tasks.update { it + result.data }
-                result
-            }
-            is ApiResult.Error -> result
-        }
-    }
+        subject: String, status: String = "Not Started", priority: String = "Normal",
+        dueDate: String? = null, whoId: String? = null, whatId: String? = null, description: String? = null,
+    ): Task = NetworkModule.taskRepository.createTask(subject, status, priority, dueDate, whoId, whatId, description)
 
     suspend fun updateTask(
-        id: String,
-        subject: String,
-        status: String,
-        priority: String,
-        dueDate: String? = null,
-        whoId: String? = null,
-        whatId: String? = null,
-        description: String? = null,
-    ): ApiResult<Task> {
-        val request = SalesforceTaskCreateRequest(
-            subject = subject,
-            status = status,
-            priority = priority,
-            activityDate = dueDate,
-            whoId = whoId,
-            whatId = whatId,
-            description = description,
-        )
+        id: String, subject: String, status: String, priority: String,
+        dueDate: String? = null, whoId: String? = null, whatId: String? = null, description: String? = null,
+    ) = NetworkModule.taskRepository.updateTask(id, subject, status, priority, dueDate, whoId, whatId, description)
 
-        return when (val result = taskRepository.updateTask(id, request)) {
-            is ApiResult.Success -> {
-                _tasks.update { list -> list.map { if (it.id == id) result.data else it } }
-                result
-            }
-            is ApiResult.Error -> result
-        }
-    }
-
-    suspend fun deleteTask(id: String): ApiResult<Unit> {
-        return when (val result = taskRepository.deleteTask(id)) {
-            is ApiResult.Success -> {
-                _tasks.update { it.filter { task -> task.id != id } }
-                result
-            }
-            is ApiResult.Error -> result
-        }
-    }
+    suspend fun deleteTask(id: String) = NetworkModule.taskRepository.deleteTask(id)
 
 
 

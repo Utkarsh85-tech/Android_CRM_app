@@ -130,8 +130,12 @@ object NetworkModule {
         com.example.nexoworxcrmapp.data.lead.LeadRepository(leadApi, database.leadDao(), database.pendingOperationDao())
     }
 
+    val taskRepository: com.example.nexoworxcrmapp.data.task.TaskRepository by lazy {
+        com.example.nexoworxcrmapp.data.task.TaskRepository(taskApi, database.taskDao(), database.pendingOperationDao())
+    }
+
     val syncManager: com.example.nexoworxcrmapp.data.sync.SyncManager by lazy {
-        com.example.nexoworxcrmapp.data.sync.SyncManager(leadRepository, database.pendingOperationDao())
+        com.example.nexoworxcrmapp.data.sync.SyncManager(leadRepository, taskRepository, database.pendingOperationDao())
     }
 
     val connectivityObserver: com.example.nexoworxcrmapp.data.sync.ConnectivityObserver by lazy {

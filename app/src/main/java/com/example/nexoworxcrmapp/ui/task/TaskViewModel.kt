@@ -1,6 +1,3 @@
-// REPLACE TaskViewModel.kt entirely
-// app/src/main/java/com/example/nexoworxcrmapp/ui/task/TaskViewModel.kt
-
 package com.example.nexoworxcrmapp.ui.task
 
 import androidx.lifecycle.SavedStateHandle
@@ -41,46 +38,48 @@ class TaskViewModel(
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
-    // parentId: the Lead/Account/Opportunity ID this screen is scoped to
-    // null = show all tasks (Tasks tab)
     private val parentId: String? = savedStateHandle.get<String>("parentId")
         ?.takeIf { it != "null" && it.isNotBlank() }
 
-    // isLead: true when parentId is a Lead ID (uses WhoId instead of WhatId)
     private val isLead: Boolean = savedStateHandle.get<Boolean>("isLead") ?: false
 
     private val _uiState = MutableStateFlow(TaskUiState())
     val uiState: StateFlow<TaskUiState> = _uiState.asStateFlow()
 
-    init { refresh() }
+    init {
+        // Observe the repository's task flow so the UI updates automatically
+        viewModelScope.launch {
+            CrmRepository.tasks.collect { allTasks ->
+                _uiState.update { state ->
+                    val filtered = if (parentId != null) {
+                        allTasks.filter { (isLead && it.whoId == parentId) || (!isLead && it.whatId == parentId) }
+                    } else {
+                        allTasks
+                    }
+                    state.copy(tasks = filtered)
+                }
+            }
+        }
+        refresh()
+    }
 
     fun refresh() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             val result = if (parentId != null) {
-                // Scoped to a specific Lead/Account/Opportunity
                 CrmRepository.refreshTasksForParent(parentId, isLead)
             } else {
-                // All tasks for the Tasks tab
                 CrmRepository.refreshTasks()
             }
-            when (result) {
-                is ApiResult.Success -> _uiState.update {
-                    it.copy(isLoading = false, tasks = result.data, errorMessage = null)
-                }
-                is ApiResult.Error -> _uiState.update {
-                    it.copy(isLoading = false, errorMessage = result.message)
-                }
-            }
+            // Just update loading state; the list itself comes from the collect block above
+            _uiState.update { it.copy(isLoading = false, errorMessage = (result as? ApiResult.Error)?.message) }
         }
     }
 
-    // Category filter — only used in Tasks tab (when parentId is null)
     fun selectCategory(category: TaskCategory) {
         _uiState.update { it.copy(selectedCategory = category) }
     }
 
-    // Returns tasks filtered by category
     fun filteredTasks(): List<Task> {
         val all = _uiState.value.tasks
         val leads = CrmRepository.leads.value.map { it.id }.toSet()
@@ -95,7 +94,6 @@ class TaskViewModel(
         }
     }
 
-    // Returns parent name for a task (Lead name / Account name / Opportunity name)
     fun parentNameForTask(task: Task): String {
         if (task.whoId.isNotBlank()) {
             return CrmRepository.leads.value.find { it.id == task.whoId }?.fullName ?: ""
@@ -106,8 +104,6 @@ class TaskViewModel(
         }
         return ""
     }
-
-    // ── Sheet ──────────────────────────────────────────────────────────────
 
     fun openCreateSheet() {
         _uiState.update {
@@ -143,7 +139,6 @@ class TaskViewModel(
     }
 
     fun closeSheet() = _uiState.update { it.copy(showSheet = false) }
-
     fun onSubjectChange(v: String) = _uiState.update { it.copy(sheetSubject = v) }
     fun onStatusChange(v: String) = _uiState.update { it.copy(sheetStatus = v) }
     fun onPriorityChange(v: String) = _uiState.update { it.copy(sheetPriority = v) }
@@ -158,41 +153,30 @@ class TaskViewModel(
         }
         viewModelScope.launch {
             _uiState.update { it.copy(sheetSaving = true, sheetError = null) }
-            val result = if (s.editingTask == null) {
-                CrmRepository.createTask(
-                    subject = s.sheetSubject,
-                    status = s.sheetStatus,
-                    priority = s.sheetPriority,
-                    dueDate = s.sheetDueDate.takeIf { it.isNotBlank() },
-                    whoId = if (isLead) parentId else null,
-                    whatId = if (!isLead) parentId else null,
-                    description = s.sheetDescription.takeIf { it.isNotBlank() },
-                )
-            } else {
-                CrmRepository.updateTask(
-                    id = s.editingTask.id,
-                    subject = s.sheetSubject,
-                    status = s.sheetStatus,
-                    priority = s.sheetPriority,
-                    dueDate = s.sheetDueDate.takeIf { it.isNotBlank() },
-                    whoId = if (isLead) parentId else s.editingTask.whoId.takeIf { it.isNotBlank() },
-                    whatId = if (!isLead) parentId else s.editingTask.whatId.takeIf { it.isNotBlank() },
-                    description = s.sheetDescription.takeIf { it.isNotBlank() },
-                )
-            }
-            when (result) {
-                is ApiResult.Success -> {
-                    refresh()
-                    _uiState.update { it.copy(sheetSaving = false, showSheet = false) }
+            try {
+                if (s.editingTask == null) {
+                    CrmRepository.createTask(
+                        subject = s.sheetSubject, status = s.sheetStatus,
+                        priority = s.sheetPriority, dueDate = s.sheetDueDate.takeIf { it.isNotBlank() },
+                        whoId = if (isLead) parentId else null,
+                        whatId = if (!isLead) parentId else null,
+                        description = s.sheetDescription.takeIf { it.isNotBlank() },
+                    )
+                } else {
+                    CrmRepository.updateTask(
+                        id = s.editingTask.id, subject = s.sheetSubject, status = s.sheetStatus,
+                        priority = s.sheetPriority, dueDate = s.sheetDueDate.takeIf { it.isNotBlank() },
+                        whoId = if (isLead) parentId else s.editingTask.whoId.takeIf { it.isNotBlank() },
+                        whatId = if (!isLead) parentId else s.editingTask.whatId.takeIf { it.isNotBlank() },
+                        description = s.sheetDescription.takeIf { it.isNotBlank() },
+                    )
                 }
-                is ApiResult.Error -> _uiState.update {
-                    it.copy(sheetSaving = false, sheetError = result.message)
-                }
+                _uiState.update { it.copy(sheetSaving = false, showSheet = false) }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(sheetSaving = false, sheetError = e.message ?: "Save failed") }
             }
         }
     }
-
-    // ── Delete ─────────────────────────────────────────────────────────────
 
     fun requestDelete(taskId: String) = _uiState.update { it.copy(deletingTaskId = taskId) }
     fun cancelDelete() = _uiState.update { it.copy(deletingTaskId = null) }
@@ -200,10 +184,11 @@ class TaskViewModel(
     fun confirmDelete() {
         val id = _uiState.value.deletingTaskId ?: return
         viewModelScope.launch {
-            _uiState.update { it.copy(deletingTaskId = null) }
-            when (CrmRepository.deleteTask(id)) {
-                is ApiResult.Success -> refresh()
-                is ApiResult.Error -> _uiState.update { it.copy(errorMessage = "Delete failed") }
+            try {
+                CrmRepository.deleteTask(id)
+                _uiState.update { it.copy(deletingTaskId = null) }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(deletingTaskId = null, errorMessage = "Delete failed") }
             }
         }
     }

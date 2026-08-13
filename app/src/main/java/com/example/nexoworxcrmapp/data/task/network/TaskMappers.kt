@@ -4,6 +4,8 @@
 package com.example.nexoworxcrmapp.data.task.network
 
 import com.example.nexoworxcrmapp.data.Task
+import com.example.nexoworxcrmapp.data.local.entity.SyncStatus
+import com.example.nexoworxcrmapp.data.local.entity.TaskEntity
 
 fun SalesforceTaskDto.toDomain(): Task {
     return Task(
@@ -17,3 +19,13 @@ fun SalesforceTaskDto.toDomain(): Task {
         whoId = whoId.orEmpty(),
     )
 }
+fun TaskEntity.toDomain(): Task = Task(
+    id = id, subject = subject, status = status, priority = priority,
+    dueDate = dueDate, whatId = whatId, description = description, whoId = whoId,
+)
+
+fun Task.toEntity(syncStatus: String = SyncStatus.SYNCED): TaskEntity = TaskEntity(
+    id = id, subject = subject, status = status, priority = priority,
+    dueDate = dueDate, whatId = whatId, whoId = whoId, description = description,
+    syncStatus = syncStatus, lastModifiedLocal = System.currentTimeMillis(),
+)

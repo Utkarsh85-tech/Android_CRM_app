@@ -23,6 +23,9 @@ import com.example.nexoworxcrmapp.data.attachment.AttachmentRepository
 import com.example.nexoworxcrmapp.data.quote.CpqApiService
 import com.example.nexoworxcrmapp.data.quote.CpqRepository
 import com.example.nexoworxcrmapp.data.account.ContractApiService
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 object NetworkModule {
     private val gson = GsonBuilder().create()
 
@@ -106,9 +109,6 @@ object NetworkModule {
         apiRetrofit.create(AttachmentApiService::class.java)
     }
 
-    val attachmentRepository: AttachmentRepository by lazy {
-        AttachmentRepository(attachmentApi)
-    }
 
     val instanceUrl: String get() = NetworkConfig.instanceUrl
     val cpqApi: CpqApiService by lazy {
@@ -134,11 +134,26 @@ object NetworkModule {
         com.example.nexoworxcrmapp.data.task.TaskRepository(taskApi, database.taskDao(), database.pendingOperationDao())
     }
 
+    val attachmentRepository: com.example.nexoworxcrmapp.data.attachment.AttachmentRepository by lazy {
+        com.example.nexoworxcrmapp.data.attachment.AttachmentRepository(
+            attachmentApi, database.attachmentDao(), database.pendingOperationDao(), appContext,
+        )
+    }
+
     val syncManager: com.example.nexoworxcrmapp.data.sync.SyncManager by lazy {
-        com.example.nexoworxcrmapp.data.sync.SyncManager(leadRepository, taskRepository, database.pendingOperationDao())
+        com.example.nexoworxcrmapp.data.sync.SyncManager(leadRepository, taskRepository, attachmentRepository, database.pendingOperationDao())
     }
 
     val connectivityObserver: com.example.nexoworxcrmapp.data.sync.ConnectivityObserver by lazy {
         com.example.nexoworxcrmapp.data.sync.ConnectivityObserver(appContext)
+    }
+
+    /** Fire-and-forget: if we're online, kick off a sync right away instead of
+     *  waiting for the periodic worker. Safe to call as often as you like —
+     *  SyncManager's mutex means overlapping calls just queue up harmlessly. */
+    fun triggerSyncIfOnline() {
+        if (connectivityObserver.isCurrentlyOnline()) {
+            CoroutineScope(Dispatchers.IO).launch { syncManager.sync() }
+        }
     }
 }

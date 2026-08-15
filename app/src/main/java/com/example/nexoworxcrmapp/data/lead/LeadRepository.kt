@@ -39,6 +39,7 @@ class LeadRepository(
                 createdAt = System.currentTimeMillis(),
             ),
         )
+        com.example.nexoworxcrmapp.network.NetworkModule.triggerSyncIfOnline()
         return entity.toDomain()
     }
 
@@ -61,6 +62,7 @@ class LeadRepository(
                 ),
             )
         }
+        com.example.nexoworxcrmapp.network.NetworkModule.triggerSyncIfOnline()
     }
 
     suspend fun deleteLead(id: String) {
@@ -81,6 +83,7 @@ class LeadRepository(
                 ),
             )
         }
+        com.example.nexoworxcrmapp.network.NetworkModule.triggerSyncIfOnline()
     }
 
     suspend fun convertLead(id: String): ApiResult<Unit> {
@@ -107,18 +110,27 @@ class LeadRepository(
         }
     }
 
-    /** Returns the new Salesforce Id on success, or null on failure. */
     suspend fun pushCreateReturningId(op: PendingOperationEntity): String? {
         val request = gson.fromJson(op.payloadJson, SalesforceLeadCreateRequest::class.java)
         return when (val result = safeApiCall { api.createLead(request) }) {
             is ApiResult.Success -> {
                 if (!result.data.success) return null
-                val fresh = safeApiCall { api.getLead(result.data.id) }
-                if (fresh is ApiResult.Success) {
-                    leadDao.replaceLocalWithServer(op.entityId, fresh.data.toDomain().toEntity(SyncStatus.SYNCED))
-                    return fresh.data.id
+                val newId = result.data.id
+
+                // The create itself succeeded — from here on we must NEVER return
+                // null, or SyncManager will retry and create a duplicate Lead.
+                val fresh = safeApiCall { api.getLead(newId) }
+                val entity = if (fresh is ApiResult.Success) {
+                    fresh.data.toDomain().toEntity(SyncStatus.SYNCED)
+                } else {
+                    // couldn't read the full record back yet — swap to the real
+                    // id anyway using what we already have locally, so the next
+                    // pull sync will fill in the rest instead of us re-creating it
+                    (leadDao.getById(op.entityId) ?: return newId)
+                        .copy(id = newId, syncStatus = SyncStatus.SYNCED)
                 }
-                null
+                leadDao.replaceLocalWithServer(op.entityId, entity)
+                newId
             }
             is ApiResult.Error -> null
         }

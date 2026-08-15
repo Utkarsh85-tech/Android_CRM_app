@@ -29,7 +29,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.nexoworxcrmapp.data.attachment.AttachmentItem
 import com.example.nexoworxcrmapp.network.NetworkModule
 import com.example.nexoworxcrmapp.ui.theme.*
-
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 @Composable
 fun AttachmentScreen(
     onBack: () -> Unit,
@@ -37,10 +38,7 @@ fun AttachmentScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
-    var authToken by remember { mutableStateOf("") }
-    LaunchedEffect(Unit) {
-        authToken = NetworkModule.authManager.getAccessToken()
-    }
+    val scope = rememberCoroutineScope()
 
 
     // File picker launcher
@@ -81,19 +79,7 @@ fun AttachmentScreen(
         )
     }
 
-    // Upload error dialog
-    if (state.uploadError != null) {
-        AlertDialog(
-            onDismissRequest = viewModel::clearUploadError,
-            title = { Text("Upload Failed", fontWeight = FontWeight.Bold) },
-            text = { Text(state.uploadError.orEmpty()) },
-            confirmButton = {
-                TextButton(onClick = viewModel::clearUploadError) { Text("OK", color = Forest) }
-            },
-            containerColor = CrmSurface,
-            shape = RoundedCornerShape(16.dp),
-        )
-    }
+
 
     // Error dialog
     if (state.errorMessage != null) {
@@ -129,16 +115,8 @@ fun AttachmentScreen(
                 fontWeight = FontWeight.Bold,
                 color = CrmSurface,
             )
-            if (state.isUploading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(24.dp).padding(end = 8.dp),
-                    color = CrmSurface,
-                    strokeWidth = 2.dp,
-                )
-            } else {
-                IconButton(onClick = { filePicker.launch("*/*") }) {
-                    Icon(Icons.Default.Upload, contentDescription = "Upload File", tint = CrmSurface)
-                }
+            IconButton(onClick = { filePicker.launch("*/*") }) {
+                Icon(Icons.Default.Upload, contentDescription = "Upload File", tint = CrmSurface)
             }
         }
 
@@ -174,7 +152,20 @@ fun AttachmentScreen(
                 items(state.attachments, key = { it.id }) { item ->
                     AttachmentCard(
                         item = item,
-                        onOpen = { downloadFile(context, item, authToken) },
+                        onOpen = {
+                            scope.launch {
+                                try {
+                                    val token = NetworkModule.authManager.getAccessToken()
+                                    downloadFile(context, item, token)
+                                } catch (e: Exception) {
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "Can't download while offline",
+                                        android.widget.Toast.LENGTH_SHORT,
+                                    ).show()
+                                }
+                            }
+                        },
                         onDelete = { viewModel.deleteFile(item.contentDocumentId) },
                     )
                 }
@@ -242,6 +233,18 @@ private fun AttachmentCard(
                 modifier = Modifier.padding(top = 2.dp),
             )
         }
+        if (item.isPending) {
+            Text(
+                text = "Pending",
+                fontSize = 10.sp,
+                color = Color(0xFFB8860B),
+                modifier = Modifier
+                    .background(Color(0xFFFFF3CD), RoundedCornerShape(6.dp))
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
+            )
+            Spacer(Modifier.width(6.dp))
+        }
+
         IconButton(onClick = onOpen, modifier = Modifier.size(36.dp)) {
         Icon(Icons.Default.Download, contentDescription = "Download", tint = Forest, modifier = Modifier.size(18.dp))
     }

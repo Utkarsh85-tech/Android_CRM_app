@@ -48,3 +48,14 @@ fun attachmentsSoql(recordId: String) =
             "ContentDocument.FileExtension,ContentDocument.ContentSize," +
             "ContentDocument.LastModifiedDate,ContentDocument.LatestPublishedVersionId " +
             "FROM ContentDocumentLink WHERE LinkedEntityId='$recordId' ORDER BY ContentDocument.LastModifiedDate DESC"
+
+data class SalesforceContentVersionQueryResponse(
+    @SerializedName("records") val records: List<SalesforceContentVersionRecord> = emptyList(),
+)
+
+data class SalesforceContentVersionRecord(
+    @SerializedName("ContentDocumentId") val contentDocumentId: String? = null,
+)
+
+fun contentVersionSoql(contentVersionId: String) =
+    "SELECT ContentDocumentId FROM ContentVersion WHERE Id='$contentVersionId'"

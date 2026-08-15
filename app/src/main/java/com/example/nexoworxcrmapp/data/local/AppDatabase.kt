@@ -10,15 +10,19 @@ import com.example.nexoworxcrmapp.data.local.entity.LeadEntity
 import com.example.nexoworxcrmapp.data.local.entity.PendingOperationEntity
 import com.example.nexoworxcrmapp.data.local.entity.TaskEntity
 import com.example.nexoworxcrmapp.data.local.dao.TaskDao
+import com.example.nexoworxcrmapp.data.local.dao.AttachmentDao
+import com.example.nexoworxcrmapp.data.local.entity.AttachmentEntity
 @Database(
-    entities = [LeadEntity::class, PendingOperationEntity::class, TaskEntity::class],
-    version = 2,
+    entities = [LeadEntity::class, PendingOperationEntity::class, TaskEntity::class, AttachmentEntity::class],
+    version = 3,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun leadDao(): LeadDao
     abstract fun taskDao(): TaskDao
     abstract fun pendingOperationDao(): PendingOperationDao
+
+    abstract fun attachmentDao(): AttachmentDao
 
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null

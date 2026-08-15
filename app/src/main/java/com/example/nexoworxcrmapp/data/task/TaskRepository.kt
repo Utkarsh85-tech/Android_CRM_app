@@ -42,6 +42,7 @@ class TaskRepository(
                 payloadJson = "{}", createdAt = System.currentTimeMillis(),
             ),
         )
+        com.example.nexoworxcrmapp.network.NetworkModule.triggerSyncIfOnline()
         return entity.toDomain()
     }
 
@@ -66,6 +67,7 @@ class TaskRepository(
                 ),
             )
         }
+        com.example.nexoworxcrmapp.network.NetworkModule.triggerSyncIfOnline()
     }
 
     suspend fun deleteTask(id: String) {
@@ -82,6 +84,7 @@ class TaskRepository(
                 ),
             )
         }
+        com.example.nexoworxcrmapp.network.NetworkModule.triggerSyncIfOnline()
     }
 
     // ---- Sync engine hooks ----

@@ -87,7 +87,7 @@ class TaskRepository(
         com.example.nexoworxcrmapp.network.NetworkModule.triggerSyncIfOnline()
     }
 
-    // ---- Sync engine hooks ----
+    // ---- Sync engine hooks
 
     suspend fun pullFromServer() {
         val result = safeApiCall { api.queryTasks(TASKS_SOQL) }

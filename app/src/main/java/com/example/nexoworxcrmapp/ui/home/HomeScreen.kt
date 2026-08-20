@@ -50,7 +50,7 @@ import java.time.format.TextStyle
 import java.util.Locale
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.widthIn
-
+import androidx.compose.material.icons.filled.Sync
 /**
  * The Home dashboard. Pure presentation — all data comes from [viewModel],
  * all navigation decisions are delegated to [onRoute] so this file never
@@ -64,6 +64,8 @@ fun HomeScreen(
     onSearchClick: () -> Unit,
     onNotificationsClick: () -> Unit,
     onQuickCreateClick: () -> Unit,
+    syncIssueCount: Int = 0,
+    onSyncIssuesClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -79,8 +81,10 @@ fun HomeScreen(
         HomeHeader(
             actionCount = state.actionItems.size,
             unreadCount = state.unreadCount,
+            syncIssueCount = syncIssueCount,
             onSearchClick = onSearchClick,
             onNotificationsClick = onNotificationsClick,
+            onSyncIssuesClick = onSyncIssuesClick,
         )
         PullToRefreshBox(
             isRefreshing = state.isLoading,
@@ -194,8 +198,10 @@ fun HomeScreen(
 private fun HomeHeader(
     actionCount: Int,
     unreadCount: Int,
+    syncIssueCount: Int,
     onSearchClick: () -> Unit,
     onNotificationsClick: () -> Unit,
+    onSyncIssuesClick: () -> Unit,
 ) {
     val today = remember { LocalDate.now() }
     Column(
@@ -231,6 +237,7 @@ private fun HomeHeader(
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                HeaderIconButton(Icons.Default.Sync, "Sync status", onSyncIssuesClick, badgeCount = syncIssueCount)
                 HeaderIconButton(Icons.Default.Search, "Search", onSearchClick)
                 HeaderIconButton(Icons.Default.Notifications, "Notifications", onNotificationsClick, badgeCount = unreadCount)
             }

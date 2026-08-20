@@ -10,10 +10,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.combine
+import com.example.nexoworxcrmapp.network.NetworkModule
 
 data class LeadUiState(
     val isLoading: Boolean = false,
     val leads: List<Lead> = emptyList(),
+    val pendingIds: Set<String> = emptySet(),
+    val failedIds: Set<String> = emptySet(),
     val errorMessage: String? = null,
 )
 
@@ -23,9 +27,14 @@ class LeadViewModel : ViewModel() {
 
     init {
         viewModelScope.launch {
-            CrmRepository.leads.collect { leadList ->
-                _uiState.update { it.copy(leads = leadList) }
-            }
+            combine(
+                CrmRepository.leads,
+                NetworkModule.syncStatusRepository.observePendingIds(),
+                NetworkModule.syncStatusRepository.observeFailedIds(),
+            ) { leads, pending, failed -> Triple(leads, pending, failed) }
+                .collect { (leads, pending, failed) ->
+                    _uiState.update { it.copy(leads = leads, pendingIds = pending, failedIds = failed) }
+                }
         }
         refresh()
     }

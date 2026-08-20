@@ -147,6 +147,9 @@ object NetworkModule {
     val connectivityObserver: com.example.nexoworxcrmapp.data.sync.ConnectivityObserver by lazy {
         com.example.nexoworxcrmapp.data.sync.ConnectivityObserver(appContext)
     }
+    val syncStatusRepository: com.example.nexoworxcrmapp.data.sync.SyncStatusRepository by lazy {
+        com.example.nexoworxcrmapp.data.sync.SyncStatusRepository(database.pendingOperationDao())
+    }
 
     /** Fire-and-forget: if we're online, kick off a sync right away instead of
      *  waiting for the periodic worker. Safe to call as often as you like —

@@ -69,10 +69,6 @@ fun EmailScreen(
         viewModel.prefill(toEmail, leadName)
     }
 
-    // Navigate back after success
-    LaunchedEffect(uiState.isSuccess) {
-        if (uiState.isSuccess) onSent()
-    }
 
     // Success dialog
     if (uiState.isSuccess) {

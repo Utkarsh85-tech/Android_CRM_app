@@ -31,6 +31,8 @@ import com.example.nexoworxcrmapp.network.NetworkModule
 import com.example.nexoworxcrmapp.ui.theme.*
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
+import com.example.nexoworxcrmapp.ui.components.SyncStatusBadge
+import com.example.nexoworxcrmapp.ui.components.syncStateFor
 @Composable
 fun AttachmentScreen(
     onBack: () -> Unit,
@@ -152,6 +154,7 @@ fun AttachmentScreen(
                 items(state.attachments, key = { it.id }) { item ->
                     AttachmentCard(
                         item = item,
+                        syncState = syncStateFor(item.id, state.pendingIds, state.failedIds),
                         onOpen = {
                             scope.launch {
                                 try {
@@ -178,6 +181,7 @@ fun AttachmentScreen(
 @Composable
 private fun AttachmentCard(
     item: AttachmentItem,
+    syncState: com.example.nexoworxcrmapp.ui.components.SyncState,
     onOpen: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -233,18 +237,7 @@ private fun AttachmentCard(
                 modifier = Modifier.padding(top = 2.dp),
             )
         }
-        if (item.isPending) {
-            Text(
-                text = "Pending",
-                fontSize = 10.sp,
-                color = Color(0xFFB8860B),
-                modifier = Modifier
-                    .background(Color(0xFFFFF3CD), RoundedCornerShape(6.dp))
-                    .padding(horizontal = 6.dp, vertical = 2.dp),
-            )
-            Spacer(Modifier.width(6.dp))
-        }
-
+        SyncStatusBadge(state = syncState, modifier = Modifier.padding(end = 6.dp))
         IconButton(onClick = onOpen, modifier = Modifier.size(36.dp)) {
         Icon(Icons.Default.Download, contentDescription = "Download", tint = Forest, modifier = Modifier.size(18.dp))
     }

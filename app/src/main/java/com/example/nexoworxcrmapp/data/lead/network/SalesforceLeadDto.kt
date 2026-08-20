@@ -81,7 +81,7 @@ data class SalesforceLeadPatchRequest(
 )
 
 const val LEADS_SOQL =
-    "SELECT Id,FirstName,LastName,Company,Status,Phone,MobilePhone,LeadSource,Rating FROM Lead"
+    "SELECT Id,FirstName,LastName,Company,Status,Phone,MobilePhone,Email,LeadSource,Rating,Industry,Title,Description FROM Lead"
 /** Request body for POST /services/data/v66.0/actions/standard/convertLead */
 //data class ConvertLeadRequest(
 //    @SerializedName("inputs") val inputs: List<ConvertLeadInput>,

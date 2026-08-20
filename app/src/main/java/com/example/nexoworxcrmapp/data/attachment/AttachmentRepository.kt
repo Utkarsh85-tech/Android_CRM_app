@@ -25,7 +25,6 @@ data class AttachmentItem(
     val contentSize: Long,
     val lastModifiedDate: String,
     val downloadVersionId: String,
-    val isPending: Boolean = false,
 )
 
 class AttachmentRepository(
@@ -41,7 +40,6 @@ class AttachmentRepository(
                     id = it.id, contentDocumentId = it.id, title = it.title,
                     fileExtension = it.fileExtension, contentSize = it.fileSizeBytes,
                     lastModifiedDate = it.lastModifiedDate, downloadVersionId = "",
-                    isPending = it.syncStatus != SyncStatus.SYNCED,
                 )
             }
         }

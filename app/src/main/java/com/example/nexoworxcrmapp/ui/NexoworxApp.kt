@@ -71,6 +71,10 @@ import com.example.nexoworxcrmapp.ui.theme.NexoworxTheme
 import kotlin.math.roundToInt
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.collectAsState
+import com.example.nexoworxcrmapp.network.NetworkModule
+import com.example.nexoworxcrmapp.ui.auth.LoginScreen
+import com.example.nexoworxcrmapp.ui.sync.SyncIssuesScreen
 
 // Speaker tab removed — now a floating draggable mic button
 enum class HomeTab(val label: String, val icon: ImageVector) {
@@ -90,6 +94,7 @@ enum class MoreItem(val label: String, val icon: ImageVector) {
 @Composable
 fun NexoworxApp() {
     NexoworxTheme {
+        var isLoggedIn by rememberSaveable { mutableStateOf(false) }
         var selectedTab by rememberSaveable { mutableStateOf(HomeTab.Home) }
         var pendingVoiceDraft by remember { mutableStateOf<LeadDraft?>(null) }
         var pendingVoiceAccountDraft by remember {
@@ -173,6 +178,12 @@ fun NexoworxApp() {
         var micOffsetY by remember { mutableFloatStateOf(0f) }
 
         when {
+            // Gate everything behind login. UI-only for now (validates input,
+            // doesn't call Salesforce) — real per-user OAuth swaps in here next.
+            !isLoggedIn -> LoginScreen(
+                onLoginSuccess = { isLoggedIn = true },
+            )
+
             // Full-screen overlays. These intentionally replace the whole app
             // (including the bottom nav) while open, same as the mockup's sheets.
             showSearch -> SearchScreen(

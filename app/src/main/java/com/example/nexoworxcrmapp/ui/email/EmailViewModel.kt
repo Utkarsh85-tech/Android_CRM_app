@@ -60,6 +60,10 @@ class EmailViewModel : ViewModel() {
             _uiState.update { it.copy(errorMessage = "Email body cannot be empty") }
             return
         }
+        if (!com.example.nexoworxcrmapp.network.NetworkModule.connectivityObserver.isCurrentlyOnline()) {
+            _uiState.update { it.copy(errorMessage = "You're offline. Email requires an internet connection to send.") }
+            return
+        }
         viewModelScope.launch {
             _uiState.update { it.copy(isSending = true, errorMessage = null) }
             when (val result = CrmRepository.sendEmailToLead(

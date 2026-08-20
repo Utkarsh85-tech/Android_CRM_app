@@ -15,6 +15,8 @@ const val MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024L // 5MB
 data class AttachmentUiState(
     val isLoading: Boolean = false,
     val attachments: List<AttachmentItem> = emptyList(),
+    val pendingIds: Set<String> = emptySet(),
+    val failedIds: Set<String> = emptySet(),
     val errorMessage: String? = null,
     val fileSizeWarning: Boolean = false,
     val pendingFileBytes: ByteArray? = null,
@@ -31,9 +33,16 @@ class AttachmentViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
 
     init {
         viewModelScope.launch {
-            repo.observeAttachments(recordId).collect { list ->
-                _uiState.update { it.copy(isLoading = false, attachments = list) }
-            }
+            kotlinx.coroutines.flow.combine(
+                repo.observeAttachments(recordId),
+                NetworkModule.syncStatusRepository.observePendingIds(),
+                NetworkModule.syncStatusRepository.observeFailedIds(),
+            ) { list, pending, failed -> Triple(list, pending, failed) }
+                .collect { (list, pending, failed) ->
+                    _uiState.update {
+                        it.copy(isLoading = false, attachments = list, pendingIds = pending, failedIds = failed)
+                    }
+                }
         }
         load()
     }

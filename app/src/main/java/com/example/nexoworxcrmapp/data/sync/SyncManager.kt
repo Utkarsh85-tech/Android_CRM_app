@@ -12,7 +12,7 @@ class SyncManager(
     private val attachmentRepository: com.example.nexoworxcrmapp.data.attachment.AttachmentRepository,
     private val pendingOpDao: PendingOperationDao,
 ) {
-    private val maxRetries = 5
+    private val maxRetries = com.example.nexoworxcrmapp.data.local.entity.MAX_SYNC_RETRIES
     private val syncMutex = Mutex()
 
 
